@@ -1,6 +1,7 @@
 """Schema validated tool layer implementing deterministic dispatch and input validation."""
 
-from typing import Any, Dict
+from types import MappingProxyType
+from typing import Any, Callable, Dict
 from google.genai import types
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from src.database import CUSTOMERS, ORDERS
@@ -131,3 +132,12 @@ GEMINI_TOOLS = [
         ]
     )
 ]
+
+_TOOL_REGISTRY_MAP: Dict[str, Callable[..., Dict[str, Any]]] = {
+    "lookup_customer": lookup_customer,
+    "lookup_order_status": lookup_order_status,
+}
+
+TOOL_REGISTRY: MappingProxyType[str, Callable[..., Dict[str, Any]]] = MappingProxyType(
+    _TOOL_REGISTRY_MAP
+)
