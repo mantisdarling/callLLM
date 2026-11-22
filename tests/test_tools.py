@@ -1,7 +1,7 @@
 """Comprehensive offline unit test suite verifying tool execution, validation, and immutability."""
 
 import pytest
-from src.tools import lookup_customer
+from src.tools import lookup_customer, lookup_order_status
 
 
 def test_lookup_customer_valid_record():
@@ -32,5 +32,37 @@ def test_lookup_customer_missing_record():
 def test_lookup_customer_malformed_email():
     """Verify malformed email strings fail schema validation cleanly."""
     result = lookup_customer("invalid_email_token")
+    assert result["status"] == "error"
+    assert "Input validation failure" in result["message"]
+
+
+def test_lookup_order_status_valid_record():
+    """Verify order retrieval returns expected shipping telemetry for known order."""
+    result = lookup_order_status("A123")
+    assert result["status"] == "success"
+    assert result["order_id"] == "A123"
+    assert result["shipping_status"] == "in_transit"
+    assert result["carrier"] == "BlueDart Express"
+    assert result["estimated_delivery"] == "November 25, 2026"
+    assert "Mechanical Keyboard" in result["items"]
+
+
+def test_lookup_order_status_normalization():
+    """Verify order lookup normalizes lowercase casing and surrounding whitespace."""
+    result = lookup_order_status("   a123   ")
+    assert result["status"] == "success"
+    assert result["order_id"] == "A123"
+
+
+def test_lookup_order_status_missing_record():
+    """Verify unknown order identifier yields deterministic not found response."""
+    result = lookup_order_status("Z999")
+    assert result["status"] == "not_found"
+    assert result["message"] == "No order record matches the provided identifier"
+
+
+def test_lookup_order_status_malformed_identifier():
+    """Verify malformed order identifiers trigger schema validation rejection."""
+    result = lookup_order_status("!!")
     assert result["status"] == "error"
     assert "Input validation failure" in result["message"]
