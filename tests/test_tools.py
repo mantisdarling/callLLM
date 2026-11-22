@@ -1,7 +1,11 @@
 """Comprehensive offline unit test suite verifying tool execution, validation, and immutability."""
 
 import pytest
-from src.tools import lookup_customer, lookup_order_status
+from dataclasses import FrozenInstanceError
+from types import MappingProxyType
+from src.config import get_gemini_api_key
+from src.database import CUSTOMERS, ORDERS
+from src.tools import TOOL_REGISTRY, lookup_customer, lookup_order_status
 
 
 def test_lookup_customer_valid_record():
@@ -66,3 +70,50 @@ def test_lookup_order_status_malformed_identifier():
     result = lookup_order_status("!!")
     assert result["status"] == "error"
     assert "Input validation failure" in result["message"]
+
+
+def test_tool_registry_structure_and_dispatch():
+    """Verify tool registry contains registered functions and enforces read only mapping."""
+    assert isinstance(TOOL_REGISTRY, MappingProxyType)
+    assert "lookup_customer" in TOOL_REGISTRY
+    assert "lookup_order_status" in TOOL_REGISTRY
+    assert TOOL_REGISTRY["lookup_customer"] == lookup_customer
+    assert TOOL_REGISTRY["lookup_order_status"] == lookup_order_status
+
+    with pytest.raises(TypeError):
+        TOOL_REGISTRY["arbitrary_key"] = lambda: None
+
+
+def test_database_immutability_guarantees():
+    """Verify MappingProxyType prevents runtime modification of mock database state."""
+    with pytest.raises(TypeError):
+        CUSTOMERS["hacker@example.com"] = None
+
+    with pytest.raises(TypeError):
+        ORDERS["FAKE_ORDER"] = None
+
+    customer_record = CUSTOMERS["rohan.sharma@example.com"]
+    with pytest.raises(FrozenInstanceError):
+        customer_record.full_name = "Modified Name"
+
+    order_record = ORDERS["A123"]
+    with pytest.raises(FrozenInstanceError):
+        order_record.status = "tampered"
+
+
+def test_config_validation_guards(monkeypatch):
+    """Verify secret management rejects empty, missing, or placeholder credentials."""
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="not configured"):
+        get_gemini_api_key()
+
+    monkeypatch.setenv("GEMINI_API_KEY", "   ")
+    with pytest.raises(RuntimeError, match="whitespace"):
+        get_gemini_api_key()
+
+    monkeypatch.setenv("GEMINI_API_KEY", "your_api_key_here")
+    with pytest.raises(RuntimeError, match="placeholder"):
+        get_gemini_api_key()
+
+    monkeypatch.setenv("GEMINI_API_KEY", "valid_secret_token_12345")
+    assert get_gemini_api_key() == "valid_secret_token_12345"
