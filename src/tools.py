@@ -1,6 +1,7 @@
 """Schema validated tool layer implementing deterministic dispatch and input validation."""
 
 from typing import Any, Dict
+from google.genai import types
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from src.database import CUSTOMERS, ORDERS
 
@@ -90,3 +91,43 @@ def lookup_order_status(order_id: str):
         "estimated_delivery": record.estimated_delivery,
         "items": list(record.items),
     }
+
+
+CUSTOMER_TOOL_DECLARATION = types.FunctionDeclaration(
+    name="lookup_customer",
+    description="Retrieve account profile and order identifiers for a customer using their registered email address",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "email": types.Schema(
+                type=types.Type.STRING,
+                description="The registered email address of the customer, for example rohan.sharma@example.com",
+            ),
+        },
+        required=["email"],
+    ),
+)
+
+ORDER_TOOL_DECLARATION = types.FunctionDeclaration(
+    name="lookup_order_status",
+    description="Retrieve shipping status, logistics carrier, and estimated delivery date for an order using its identifier",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "order_id": types.Schema(
+                type=types.Type.STRING,
+                description="The unique order identifier, for example A123 or ORD_8801",
+            ),
+        },
+        required=["order_id"],
+    ),
+)
+
+GEMINI_TOOLS = [
+    types.Tool(
+        function_declarations=[
+            CUSTOMER_TOOL_DECLARATION,
+            ORDER_TOOL_DECLARATION,
+        ]
+    )
+]
