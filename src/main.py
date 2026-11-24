@@ -41,16 +41,16 @@ def run_demo_suite():
         )
     )
 
-    for index, (scenario_title, query_prompt) in enumerate(SCENARIOS, start=1):
+    for index, (scenario_title, query_text) in enumerate(SCENARIOS, start=1):
         console.print(
             Panel(
-                f"{scenario_title}\nQuery: {query_prompt}",
+                f"{scenario_title}\nQuery: {query_text}",
                 title=f"Benchmark Case {index} of {len(SCENARIOS)}",
                 border_style="cyan",
             )
         )
 
-        run_agentic_loop(user_query=query_prompt)
+        run_agentic_loop(user_query=query_text)
 
         if index < len(SCENARIOS):
             time.sleep(1.0)
