@@ -1,5 +1,5 @@
-google_genai
-python_dotenv
-pydantic
-rich
-pytest
+google-genai==3.6.1
+python-dotenv==1.2.4
+pydantic==2.14.4
+rich==15.0.0
+pytest==9.2.0

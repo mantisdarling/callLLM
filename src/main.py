@@ -1,14 +1,7 @@
-"""Application entrypoint executing sequential demonstration scenarios for tool calling agent."""
+"""Run three demonstration queries against the tool calling agent."""
 
-import sys
-import time
-from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 from src.agent import run_agentic_loop
 
@@ -16,51 +9,47 @@ console = Console()
 
 SCENARIOS = (
     (
-        "Scenario 1: Single Tool Lookup for Known Order",
+        "Scenario 1: Known order lookup",
         "What is the current shipping status of order A123?",
     ),
     (
-        "Scenario 2: Edge Case Query for Unknown Order",
+        "Scenario 2: Unknown order lookup",
         "Can you check the status of order Z999?",
     ),
     (
-        "Scenario 3: Multi Tool Chaining for Customer Orders",
-        "Look up the account for rohan.sharma@example.com and tell me the shipping status of all their orders.",
+        "Scenario 3: Customer and order lookups",
+        (
+            "Look up the account for rohan.sharma@example.com and tell me the "
+            "shipping status of all their orders."
+        ),
     ),
 )
 
 
-def run_demo_suite():
-    """Execute three verification scenarios sequentially with a one second separation pause."""
+def run_demo_suite() -> None:
     console.print(
         Panel(
-            "Starting Deterministic Tool Calling Demonstration Suite\n"
-            "Testing Gemini 2.5 Flash with ReAct Bounded Execution Loop",
-            title="System Benchmark Suite",
+            "Gemini 3.6 Flash tool calling demonstration",
+            title="callLLM Demo",
             border_style="bold blue",
         )
     )
 
-    for index, (scenario_title, query_text) in enumerate(SCENARIOS, start=1):
+    for index, (title, query) in enumerate(SCENARIOS, start=1):
         console.print(
             Panel(
-                f"{scenario_title}\nQuery: {query_text}",
-                title=f"Benchmark Case {index} of {len(SCENARIOS)}",
+                f"{title}\nQuery: {query}",
+                title=f"Scenario {index} of {len(SCENARIOS)}",
                 border_style="cyan",
             )
         )
-
-        run_agentic_loop(user_query=query_text)
-
-        if index < len(SCENARIOS):
-            time.sleep(1.0)
+        run_agentic_loop(query)
 
     console.print(
         Panel(
-            "All demonstration scenarios executed cleanly\n"
-            "Tool execution telemetry verified against immutable data store",
-            title="Demonstration Suite Complete",
-            border_style="bold green",
+            "Review the output above for each tool call and final answer.",
+            title="Demonstration Finished",
+            border_style="green",
         )
     )
 

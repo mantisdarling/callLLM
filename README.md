@@ -1,43 +1,82 @@
-# callLLM: Deterministic Tool Calling Agent Architecture
+# callLLM
 
-A production grade implementation of schema constrained tool calling and bounded agentic execution built with the official Google Gemini Python SDK (`google_genai`) targeting `gemini-2.5-flash`.
+A small Gemini project that demonstrates manual tool calling. The model asks Python to run a function, reads the function result, and then writes a final answer.
 
-Repository: https://github.com/mantisdarling/callLLM
+## What is a tool call?
 
-## Core Architectural Thesis
+A tool call happens when the model does not answer from memory alone. Instead, it returns a structured request such as `lookup_order_status(order_id="A123")`. Python runs the matching function and sends the result back to the model.
 
-Modern agentic systems require predictable, verifiable, and secure execution boundaries. High level agent frameworks frequently obscure model reasoning and state transitions behind opaque abstractions. In contrast, this repository demonstrates a manual, deterministic ReAct execution loop where every reasoning trace, tool invocation schema, local function dispatch, and model assimilation step remains inspectable and testable.
+This project keeps that step visible by disabling the SDK's automatic function execution. You can see the raw model response, the local Python result, and the final answer.
 
-The architecture synthesizes two foundational applied AI research paradigms:
-* **ReAct Paradigm (Yao et al., 2023):** Interleaving reasoning traces with domain actions, enabling dynamic multi step plans while grounding decisions in external data.
-* **Toolformer Mechanism (Schick et al., 2023):** Teaching language models when and how to invoke explicit API signatures via strict parameter typing, deterministic schema decoding, and structured dictionary ingestion.
+## Features
 
-## System Lifecycle Flow
+- Uses the official Gemini SDK with `gemini-3.6-flash`.
+- Defines `lookup_order_status(order_id: str) -> dict`.
+- Includes six fake orders and five fake customers.
+- Supports known orders, unknown orders, and chained customer and order lookups.
+- Validates tool inputs before looking up records.
+- Prints the raw Gemini response before executing a function call.
+- Sends function results back in a `user` content turn, as required by the Gemini `generate_content` endpoint.
+- Limits the loop to five model requests.
+- Includes offline tests that do not need an API key.
 
-The execution cycle enforces bounded iterations with zero automatic client side tool execution:
+## Requirements
 
+- Python 3.10 or newer
+- A Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey)
+
+The tested package versions are recorded in `requirements.txt`.
+
+## Setup
+
+Run these commands from the project folder.
+
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
-[ User Query ]
-       │
-       ▼
-[ Gemini 2.5 Flash Engine ] (Model: gemini-2.5-flash, temperature: 0.0)
-       │
-       ▼ (Emits structured function call request)
-[ Schema Validation Layer ] (Pydantic models sanitize input arguments)
-       │
-       ▼ (Dispatches to registered callable)
-[ Immutable Backend Store ] (MappingProxyType and frozen dataclasses)
-       │
-       ▼ (Returns structured Python dictionary payload)
-[ Function Response Assimilation ] (Types.Part.from_function_response)
-       │
-       ▼
-[ Grounded Terminal Synthesis ] (Synthesizes factual natural language answer)
+
+Open `.env` and replace the placeholder with your real key.
+
+```dotenv
+GEMINI_API_KEY=your_api_key_here
 ```
 
-## Repository Scaffold
+The `.env` file is ignored by Git. Never commit it or paste the key into source code, screenshots, README files, or terminal output.
 
+## Run the demo
+
+```powershell
+python -m src.main
 ```
+
+The demo runs three queries:
+
+1. Look up the known order `A123`.
+2. Look up the unknown order `Z999`.
+3. Look up a customer and then check all of their orders.
+
+For each tool call, the output shows:
+
+1. The raw Gemini response containing the function call.
+2. The dictionary returned by the Python function.
+3. The final natural language answer from Gemini.
+
+The exact wording of the final answer can vary between runs.
+
+## Run the tests
+
+```powershell
+python -m pytest -ra
+```
+
+The tests use fake Gemini responses. They cover tool execution, the `user` content role used for function responses, unknown tools, unknown orders, empty responses, exceptions, multiple function calls, and the iteration limit. No API key or network access is required.
+
+## Project structure
+
+```text
 callLLM/
   .env.example
   .gitignore
@@ -45,115 +84,62 @@ callLLM/
   README.md
   src/
     __init__.py
+    agent.py
     config.py
     database.py
-    tools.py
-    agent.py
     main.py
+    tools.py
   tests/
     __init__.py
+    test_agent.py
     test_tools.py
 ```
 
-## Architectural Invariants and Security
+## Example output
 
-1. **State Immutability at Runtime:** All customer and order entities are stored within `types.MappingProxyType` instances holding frozen dataclass objects. Neither model hallucinations nor malfunctioning tools can mutate backend state during runtime execution.
-2. **Deterministic Tool Dispatch:** Tool execution delegates through a read only registry mapping validated function identifiers to pure Python functions. Unregistered tool calls trigger deterministic error payloads rather than arbitrary code execution.
-3. **Pydantic Input Sanitization:** Function arguments undergo boundary validation, casing normalization, and regex validation prior to executing database lookups.
-4. **Secret Protection Invariants:** Environment validation in `src/config.py` enforces present, non empty, and non placeholder credentials while ensuring tokens never appear in exception messages, logs, or execution traces.
-5. **Bounded Execution Loop:** The ReAct loop enforces a strict iteration threshold (`max_iterations=5`), preventing runaway recursive API consumption.
+This is an abbreviated illustration, not a recorded API response.
 
-## Environment Configuration
+```text
+Raw Gemini Response
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "function_call": {
+              "args": { "order_id": "A123" },
+              "name": "lookup_order_status"
+            }
+          }
+        ],
+        "role": "model"
+      }
+    }
+  ]
+}
 
-Clone the repository and prepare the Python environment:
+Local Python Execution Output
+{
+  "status": "success",
+  "order_id": "A123",
+  "shipping_status": "in_transit",
+  "carrier": "BlueDart Express",
+  "estimated_delivery": "November 25, 2026",
+  "items": ["Mechanical Keyboard", "USB C Hub"]
+}
 
-```powershell
-git clone https://github.com/mantisdarling/callLLM.git
-cd callLLM
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install google_genai python_dotenv pydantic rich pytest
+Final Grounded Response
+Order A123 is currently in transit with BlueDart Express.
 ```
 
-Copy the environment template and insert your valid Google Gemini API key:
+## Submission evidence
 
-```powershell
-cp .env.example .env
-```
+Use screenshots from your own real run. Do not show the API key.
 
-Set your secret key inside `.env`:
+1. Raw Gemini function call for `A123` (`01-live-tool-call.png`).
+2. Python function result and final grounded answer for `A123` (`02-local-tool-result.png`).
+3. Safe handling of the unknown order `Z999` (`03-unknown-order.png`).
+4. Passing automated test suite (`04-chaining-and-tests.png`).
 
-```
-GEMINI_API_KEY=your_actual_api_key_here
-```
-
-## Running the Automated Benchmark Suite
-
-Execute the three verification scenarios sequentially:
-
-```powershell
-python src/main.py
-```
-
-The demonstration suite executes three test scenarios:
-1. **Single Tool Lookup:** Queries order status for known identifier `A123`.
-2. **Edge Case Handling:** Queries missing order identifier `Z999`, verifying honest abstention without hallucination.
-3. **Multi Tool Chaining:** Resolves account profile for `rohan.sharma@example.com`, parses associated order references, and sequentially queries fulfillment status for all linked shipments.
-
-## Sample Terminal Output
-
-```
-┌────────────────────────────── System Benchmark Suite ──────────────────────────────┐
-│ Starting Deterministic Tool Calling Demonstration Suite                            │
-│ Testing Gemini 2.5 Flash with ReAct Bounded Execution Loop                         │
-└────────────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────── Benchmark Case 1 of 3 ──────────────────────────────┐
-│ Scenario 1: Single Tool Lookup for Known Order                                     │
-│ Query: What is the current shipping status of order A123?                          │
-└────────────────────────────────────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────── User Query ────────────────────────────────────┐
-│ What is the current shipping status of order A123?                                 │
-└────────────────────────────────────────────────────────────────────────────────────┘
-
-┌───────────────────────────── Raw Model Tool Call Step ─────────────────────────────┐
-│ {                                                                                  │
-│   "function": "lookup_order_status",                                               │
-│   "arguments": {                                                                   │
-│     "order_id": "A123"                                                             │
-│   }                                                                                │
-│ }                                                                                  │
-└────────────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────── Local Python Execution Output ──────────────────────────┐
-│ {                                                                                  │
-│   "status": "success",                                                             │
-│   "order_id": "A123",                                                              │
-│   "shipping_status": "in_transit",                                                 │
-│   "carrier": "BlueDart Express",                                                   │
-│   "estimated_delivery": "November 25, 2026",                                       │
-│   "items": [                                                                       │
-│     "Mechanical Keyboard",                                                         │
-│     "USB C Hub"                                                                    │
-│   ]                                                                                │
-│ }                                                                                  │
-└────────────────────────────────────────────────────────────────────────────────────┘
-
-┌────────────────────────────── Final Grounded Response ─────────────────────────────┐
-│ Order A123 is currently in transit with BlueDart Express.                          │
-│ Estimated delivery is November 25, 2026. The shipment contains:                    │
-│ * Mechanical Keyboard                                                              │
-│ * USB C Hub                                                                        │
-└────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-## Offline Unit Test Suite
-
-Execute the comprehensive offline test suite verifying schema validation, input normalization, immutability guarantees, and dispatch protection without requiring active network connectivity or API credentials:
-
-```powershell
-pytest
-```
-
-All 11 unit test assertions validate deterministically offline.
+The assignment also requires a GitHub repository, a LinkedIn post with a short demo video or screenshots, and the dashboard submission. Those external steps are not completed by running this project locally.

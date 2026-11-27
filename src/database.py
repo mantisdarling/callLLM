@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Tuple
 
 
 @dataclass(frozen=True)
@@ -12,7 +11,7 @@ class CustomerRecord:
     customer_id: str
     full_name: str
     account_tier: str
-    order_ids: Tuple[str, ...]
+    order_ids: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -23,7 +22,7 @@ class OrderRecord:
     status: str
     carrier: str
     estimated_delivery: str
-    items: Tuple[str, ...]
+    items: tuple[str, ...]
 
 
 _CUSTOMERS_STORE = {

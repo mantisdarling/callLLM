@@ -1,8 +1,10 @@
 """Comprehensive offline unit test suite verifying tool execution, validation, and immutability."""
 
-import pytest
 from dataclasses import FrozenInstanceError
 from types import MappingProxyType
+
+import pytest
+
 from src.config import get_gemini_api_key
 from src.database import CUSTOMERS, ORDERS
 from src.tools import TOOL_REGISTRY, lookup_customer, lookup_order_status
@@ -36,8 +38,7 @@ def test_lookup_customer_missing_record():
 def test_lookup_customer_malformed_email():
     """Verify malformed email strings fail schema validation cleanly."""
     result = lookup_customer("invalid_email_token")
-    assert result["status"] == "error"
-    assert "Input validation failure" in result["message"]
+    assert result == {"status": "error", "message": "Invalid email format"}
 
 
 def test_lookup_order_status_valid_record():
@@ -65,11 +66,10 @@ def test_lookup_order_status_missing_record():
     assert result["message"] == "No order record matches the provided identifier"
 
 
-def test_lookup_order_status_malformed_identifier():
-    """Verify malformed order identifiers trigger schema validation rejection."""
-    result = lookup_order_status("!!")
-    assert result["status"] == "error"
-    assert "Input validation failure" in result["message"]
+@pytest.mark.parametrize("order_id", ["!!", "!!_", "A-123_", "A 123", "AB"])
+def test_lookup_order_status_malformed_identifier(order_id):
+    result = lookup_order_status(order_id)
+    assert result == {"status": "error", "message": "Invalid order ID format"}
 
 
 def test_tool_registry_structure_and_dispatch():
@@ -111,9 +111,10 @@ def test_config_validation_guards(monkeypatch):
     with pytest.raises(RuntimeError, match="whitespace"):
         get_gemini_api_key()
 
-    monkeypatch.setenv("GEMINI_API_KEY", "your_api_key_here")
-    with pytest.raises(RuntimeError, match="placeholder"):
-        get_gemini_api_key()
+    for placeholder in ("your_api_key_here", "your_actual_api_key_here"):
+        monkeypatch.setenv("GEMINI_API_KEY", placeholder)
+        with pytest.raises(RuntimeError, match="placeholder"):
+            get_gemini_api_key()
 
     monkeypatch.setenv("GEMINI_API_KEY", "valid_secret_token_12345")
     assert get_gemini_api_key() == "valid_secret_token_12345"

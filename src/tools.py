@@ -1,53 +1,45 @@
-"""Schema validated tool layer implementing deterministic dispatch and input validation."""
+"""Define validated tools and their Gemini function declarations."""
 
+import re
+from collections.abc import Callable
 from types import MappingProxyType
-from typing import Any, Callable, Dict
+
 from google.genai import types
 from pydantic import BaseModel, Field, ValidationError, field_validator
+
 from src.database import CUSTOMERS, ORDERS
 
 
 class CustomerLookupInput(BaseModel):
-    """Schema validation for customer email lookup input."""
-
     email: str = Field(min_length=5, max_length=254)
 
     @field_validator("email")
     @classmethod
-    def sanitize_email(cls, value: str):
-        """Strip whitespace and enforce lowercase normalization for database query alignment."""
-        sanitized = value.strip().lower()
-        if "@" not in sanitized or "." not in sanitized:
-            raise ValueError("Malformed email address format")
-        return sanitized
+    def normalize_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized) is None:
+            raise ValueError("Invalid email format")
+        return normalized
 
 
 class OrderLookupInput(BaseModel):
-    """Schema validation for order identifier lookup input."""
-
     order_id: str = Field(min_length=3, max_length=32)
 
     @field_validator("order_id")
     @classmethod
-    def sanitize_order_id(cls, value: str):
-        """Strip whitespace and enforce uppercase normalization for database query alignment."""
-        sanitized = value.strip().upper()
-        if not sanitized.isalnum() and "_" not in sanitized:
-            raise ValueError("Malformed order identifier format")
-        return sanitized
+    def normalize_order_id(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if re.fullmatch(r"[A-Z0-9]+(?:_[A-Z0-9]+)*", normalized) is None:
+            raise ValueError("Invalid order ID format")
+        return normalized
 
 
-def lookup_customer(email: str):
-    """Retrieve customer account information and associated order references.
-
-    Validates input through CustomerLookupInput schema, normalizes email casing,
-    and queries immutable customer storage, returning structured entity details
-    following Toolformer deterministic invocation principles.
-    """
+def lookup_customer(email: str) -> dict[str, object]:
+    """Look up a customer by email and return their order IDs."""
     try:
         validated = CustomerLookupInput(email=email)
-    except ValidationError as error:
-        return {"status": "error", "message": f"Input validation failure: {error}"}
+    except ValidationError:
+        return {"status": "error", "message": "Invalid email format"}
 
     record = CUSTOMERS.get(validated.email)
     if record is None:
@@ -65,17 +57,12 @@ def lookup_customer(email: str):
     }
 
 
-def lookup_order_status(order_id: str):
-    """Retrieve fulfillment lifecycle state and logistics information for an order.
-
-    Validates input through OrderLookupInput schema, normalizes identifier casing,
-    and queries immutable order storage, returning verified shipment telemetry
-    grounded in immutable backend state.
-    """
+def lookup_order_status(order_id: str) -> dict[str, object]:
+    """Look up the current shipping status of an order by its ID."""
     try:
         validated = OrderLookupInput(order_id=order_id)
-    except ValidationError as error:
-        return {"status": "error", "message": f"Input validation failure: {error}"}
+    except ValidationError:
+        return {"status": "error", "message": "Invalid order ID format"}
 
     record = ORDERS.get(validated.order_id)
     if record is None:
@@ -133,11 +120,8 @@ GEMINI_TOOLS = [
     )
 ]
 
-_TOOL_REGISTRY_MAP: Dict[str, Callable[..., Dict[str, Any]]] = {
+_TOOL_REGISTRY_MAP: dict[str, Callable[..., dict[str, object]]] = {
     "lookup_customer": lookup_customer,
     "lookup_order_status": lookup_order_status,
 }
-
-TOOL_REGISTRY: MappingProxyType[str, Callable[..., Dict[str, Any]]] = MappingProxyType(
-    _TOOL_REGISTRY_MAP
-)
+TOOL_REGISTRY = MappingProxyType(_TOOL_REGISTRY_MAP)
